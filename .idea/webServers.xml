@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="75dc8efe-7529-425a-b304-e0939c7675a1" name="rtx3090">
+        <fileTransfer rootFolder="/home/ghc/Dropbox/TheSource/scripts" accessType="SFTP" host="140.112.122.141" port="22" sshConfigId="126c3377-9b36-4db4-a441-3b13b70c5ae3" sshConfig="ghc@140.112.122.141:22 password">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" keepAliveTimeout="0" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+        </fileTransfer>
+      </webServer>
+    </option>
+  </component>
+</project>
