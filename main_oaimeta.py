@@ -112,8 +112,6 @@ def read_some(filename, path_root, var_list, ver_list, prj_list, keep):
 def main():
     oai = dict()
     ver_list = ['00', '01', '03', '05', '06', '08', '10']
-    # PATHS
-    path_oai_root = os.path.join(os.path.join(os.path.expanduser('~'), 'Dropbox'), 'TheSource/OAIDataBase')
 
     # ENROLLMENT
     enr = oai_extract_data(path_oai_root, 'General_SAS/enrollees',
@@ -147,7 +145,7 @@ def main():
     moaks = []
     for ver in ['00', '01', '03', '05', '06']:
         found = oai_extract_data(path_oai_root, 'MR Image Assessment_SAS/Semi-Quant Scoring_SAS/kmri_sq_moaks_bicl'
-                                 , ver=ver, var_list=['ID', 'SIDE', 'READPRJ'] + MOAKS_get_vars(['Whole Knee Effusion'], ver=ver))
+                                 , ver=ver, var_list=['ID', 'SIDE', 'READPRJ'] + MOAKS_get_vars(['BML Size'], ver=ver))
                                                                             #['Cartilage Morphology', 'BML Size', 'BML #', 'BML (Edema %)', 'Whole Knee Effusion']
 
         found['VER'] = ver
@@ -157,6 +155,24 @@ def main():
     oai['MOAKS'] = moaks
     return oai
 
+
+def get_moaks():
+    moaks = []
+    for ver in ['00', '01', '03', '05', '06']:
+        found = oai_extract_data(path_oai_root, 'MR Image Assessment_SAS/Semi-Quant Scoring_SAS/kmri_sq_moaks_bicl'
+                                 , ver=ver, var_list=['ID', 'SIDE', 'READPRJ'] + MOAKS_get_vars(['BML Size'], ver=ver))
+                                                                            #['Cartilage Morphology', 'BML Size', 'BML #', 'BML (Edema %)', 'Whole Knee Effusion']
+        found.columns = [x.replace(ver, '$$') for x in found.columns]
+
+        found['VER'] = ver
+        prjs = list(found['READPRJ'].value_counts().keys())
+        moaks.append(merge_prjs(found, prjs=prjs, keep=['ID', 'SIDE']))
+    moaks = merge_multiple_data(moaks, on=list(moaks[0].columns), how='outer')
+    #moaks = merge_multiple_data(moaks, on=['ID', 'SIDE', 'VER'], how='outer')
+    moaks = sort_columns(moaks, ['ID', 'SIDE', 'VER'])
+    moaks['SIDE'] = [['RIGHT', 'LEFT'][int(x) - 1] for x in moaks['SIDE']]
+    return moaks
+    
 
 def sort_columns(x, first):
     left_over = sorted(list(set(x.columns) - set(first)))
@@ -215,10 +231,31 @@ def left_right_have_mri(x):
 
 
 if __name__ == '__main__':
+    path_oai_root = os.path.join(os.path.join(os.path.expanduser('~'), 'Dropbox'), 'TheSource/OAIDataBase')
     oai = main()
     path_all = load_path_files()
+    moaks = get_moaks()
 
     do_thing = 'X'
+
+    if do_thing == 'ver=00':
+        x = []
+        threshold = 5
+        for VER in ['00']:
+            var0 = 'V' + VER + 'WOMKPR'
+            var1 = 'V' + VER + 'WOMKPL'
+            y = (lambda x: x.loc[((x[var0]-x[var1]).abs() >= threshold)])(oai['CLINICAL']).loc[:, ['ID', var0, var1]]
+            y['VER'] = VER
+            x.append(y)
+
+        x = pd.DataFrame({'ID': oai['CLINICAL']['ID']})
+        x['VER'] = '00'
+        x['sequences'] = 'SAG_3D_DESS_'
+        x = copy_left_right(x)
+        x = find_mri(x)
+        x = x.loc[~x['folders'].isna()]
+        x = sort_columns(x, ['VER', 'ID', 'SIDE', 'sequences', 'folders'])
+        x.to_csv('meta/allver0.csv')
 
     if do_thing == 'unilateral frequent pain with womac pain difference >= 3':
         # unilateral frequency pain with womac pain difference >= 3 between left and right knees
@@ -226,7 +263,11 @@ if __name__ == '__main__':
                              ((x['V00WOMKPR'] - x['V00WOMKPL']).abs() >= 3)])(oai['CLINICAL'])
         using = np.load('meta/subjects_unipain_womac3.npy')
         y = y.loc[y['ID'].isin(using)]
-        y.to_csv('meta/subjects_unipain_womac3.csv', index=False)
+        #y.to_csv('meta/subjects_unipain_womac3.csv', index=False)
+
+        y = y[['ID', 'V00WOMKPR', 'V00WOMKPL']]
+        y['SIDE'] = [['LEFT', 'RIGHT'][int(x)] for x in (y['V00WOMKPR'] > y['V00WOMKPL'])]
+        has_moaks = pd.merge(moaks.loc[moaks['VER'] == '00'], y, how='inner', on=['ID', 'SIDE'])
 
     if do_thing == 'womac pain difference >= 5 between knees':
         x = []
@@ -280,3 +321,12 @@ if __name__ == '__main__':
             l0r1 = pd.merge(l0, r1, how='inner', on=['ID', 'VER'])
             print(pd.concat([l1r0, l0r1]).shape)
             x.append(pd.concat([l1r0, l0r1]))
+
+    if do_thing == 'with bml only size >= 2':
+        bml = moaks.iloc[:, 4:]
+        selected = ((bml >= 2).sum(1) == (bml != 0).sum(1)) & ((bml != 0).sum(1) > 0)
+        selected = moaks.loc[selected, :]
+        selected['sequences'] = 'SAG_IW_TSE_'
+        selected.loc[selected['SIDE'] == 1, 'SIDE'] = 'RIGHT'
+        selected.loc[selected['SIDE'] == 2, 'SIDE'] = 'LEFT'
+        x = find_mri(selected)

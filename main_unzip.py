@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 import os, glob
 import pydicom
 import numpy as np
+import tifffile as tiff
 
 
 def unzip_selected(df, zipname, destination):
@@ -42,21 +43,32 @@ def dcm_to_npys_and_metas(x, destination, metas):
         # find ID and sequence and make folders if don't exist
         ID = f.split('/')[-3]
         sequence = pydicom.read_file(dcm_list[0]).SeriesDescription
+        SIDE = sequence.split('_')[-1]
+        sequence = sequence.replace(SIDE, '')
         VER = str(f.split('/')[-4].split('.')[0]).zfill(2)
         os.makedirs(destination + sequence + '/', exist_ok=True)
-        os.makedirs(destination + sequence + '/' + ID + '_' + VER + '/', exist_ok=True)
 
+        # npy 2D
+        dcm_all = []
         for d in dcm_list:
             dcm = pydicom.read_file(d)
-            npyname = destination + sequence + '/' + ID + '_' + VER + '/' + d.split('/')[-1]
-            np.save(npyname + '.npy', dcm.pixel_array)
-            meta = [sequence + '/' + ID + '_' + VER + '/' + d.split('/')[-1]]
+            dcm_all.append(np.expand_dims(dcm.pixel_array, 0))
+
+            if 0: # npy 2D
+                os.makedirs(destination + sequence + '/' + ID + '_' + VER + '/', exist_ok=True)
+                npyname = destination + sequence + '/' + ID + '_' + VER + '/' + d.split('/')[-1]
+                np.save(npyname + '.npy', dcm.pixel_array)
+
+            meta = [sequence + '/' + ID + '_' + VER + '_' + SIDE + '/' + d.split('/')[-1]]
             for m in metas:
                 meta = meta + [getattr(dcm, m)]
             dcm_meta.append(meta)
 
-    dcm_meta = pd.DataFrame(dcm_meta, columns=['filename']+metas)
-    dcm_meta.to_csv(destination + 'meta.csv', index=False)
+        dcm_all = np.concatenate(dcm_all, 0)
+        tiff.imsave(destination + sequence + '/' + ID + '_' + VER + '_' + SIDE + '.tif', dcm_all)
+
+        dcm_meta = pd.DataFrame(dcm_meta, columns=['filename']+metas)
+        dcm_meta.to_csv(destination + 'meta.csv', index=False)
 
 
 def dcm_2_npys(dcm_folder):
@@ -84,8 +96,8 @@ if __name__ == '__main__':
     zipfiles = get_zip()
 
     # name of the data
-    csv = pd.read_csv('meta/womac5min0.csv')
-    data_name = 'womac5min0/'
+    csv = pd.read_csv('meta/allver0.csv')
+    data_name = 'allver0/'
 
     # unzip dicom files from the zip file
     for v in set(csv['VER']):
@@ -94,5 +106,5 @@ if __name__ == '__main__':
                        zipname=source + zipfiles[str(v).zfill(2)],
                        destination=destination + data_name)
 
-    # convert the images from the dicom to .npy
+        # convert the images from the dicom to .npy
     meta = dcm_2_npys(dcm_folder=destination + data_name)
