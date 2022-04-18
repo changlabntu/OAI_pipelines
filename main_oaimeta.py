@@ -74,7 +74,7 @@ def oai_extract_data(path_oai_root, key, ver, var_list=None):
 
 def MOAKS_get_vars(categories, ver):
     moaks_summary = pd.read_excel(os.path.join(os.path.expanduser('~'), 'Dropbox',
-                                               'TheSource/OAIDataBase/OAI_Labels/MOAKS/KMRI_SQ_MOAKS_variables_summary.xlsx'))
+                                               '/Family Room/LabProjects/OAIDataBase/OAI_Labels/MOAKS/KMRI_SQ_MOAKS_variables_summary.xlsx'))
     moaks_variables = moaks_summary.loc[moaks_summary['CATEGORY'].isin(categories), 'VARIABLE']
     l = list(moaks_variables.values)
     return [x.replace('$$', ver) for x in l]
@@ -231,7 +231,7 @@ def left_right_have_mri(x):
 
 
 if __name__ == '__main__':
-    path_oai_root = os.path.join(os.path.join(os.path.expanduser('~'), 'Dropbox'), 'TheSource/OAIDataBase')
+    path_oai_root = os.path.join(os.path.join(os.path.expanduser('~'), 'Dropbox'), '/Family Room/LabProjects/OAIDataBase')
     oai = main()
     path_all = load_path_files()
     moaks = get_moaks()
